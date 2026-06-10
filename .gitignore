@@ -12,8 +12,8 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Ortam Değişkenleri ve Gizli Dosyalar
-.env
-.env.local
+#.env
+#.env.local
 
 # Veri ve Çıktılar (Büyük veri dosyalarını Git dışında tutmak iyidir)
 #data/*.xlsx
