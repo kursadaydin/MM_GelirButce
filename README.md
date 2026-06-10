@@ -78,7 +78,7 @@ Projede kullanılan girdi (feature) setleri ekonomik teoriye ve veri setinin gü
 1. Gelir Vergisi (Tax_PIT) - Çeyreklik Veri (n / n-4)
    • Bağımlı Değişken: Tax_PIT
    • Açıklayıcı Göstergeler: Salary_Inx (Maaş Endeksi), Employee_Vol (Çalışan Hacmi), Deposit_Vol (Mevduat Hacmi), Deposit_Int_Rt (Mevduat Faiz Oranı).
-   • Aktif Uzman Kuralı: Toplam gelir vergisi içinde ücretlerin payı %75, Menkul Sermaye İratlarının (MSİ) payı %25 olarak kabul edilmiştir. Sistem, ücret indikatörlerinin (Salary_Inx, Employee_Vol) trendi ile MSİ indikatörlerinin (Deposit_Vol, Deposit_Int_Rt) trendini bu oranlarda ağırlıklandırarak makroekonomik bir beklenti oluşturur ve sinir ağının ham tahminini bu beklenti ekseninde dengeler.
+   • Aktif Uzman Kuralı: Toplam gelir vergisi içinde ücretlerin payı %54, Menkul Sermaye İratlarının (MSİ) payı %18 olarak kabul edilmiştir. Sistem, ücret indikatörlerinin (Salary_Inx, Employee_Vol) trendi ile MSİ indikatörlerinin (Deposit_Vol, Deposit_Int_Rt) trendini bu oranlarda ağırlıklandırarak makroekonomik bir beklenti oluşturur ve sinir ağının ham tahminini bu beklenti ekseninde dengeler. İndikatör kısıtından dolayı ölçülemeyen %26'lık kör noktayı bütçe paylarına göre ağırlıklandırarak ham tahmini rasyonelleştirir.
 
 2. Kurumlar Vergisi (Tax_CIT) - Çeyreklik Veri (n / n-4)
    • Bağımlı Değişken: Tax_CIT
