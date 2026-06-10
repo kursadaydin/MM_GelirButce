@@ -1,0 +1,23 @@
+# Sanal Ortam (Virtual Environment)
+venv/
+.venv/
+env/
+
+# Python Geçici Dosyaları
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Ortam Değişkenleri ve Gizli Dosyalar
+.env
+.env.local
+
+# Veri ve Çıktılar (Büyük veri dosyalarını Git dışında tutmak iyidir)
+#data/*.xlsx
+#data/*.csv
+outputs/
+models/*.h5
+models/*.keras
