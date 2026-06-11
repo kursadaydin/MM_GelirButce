@@ -107,20 +107,66 @@ def main():
             df, target_col=config["target"], feature_cols=config["features"]
         )
         
+        # Modeli eğit ve ham tahminleri al
         model_instance.train(X_train, y_train, X_test, y_test, epochs=200)
-        raw_preds = model_instance.predict(X_test)
+        raw_preds = model_instance.predict(X_test).flatten() # Boyut uyuşmazlığını önlemek için düzleştirildi
         
-        # Uzman Kuralları Uygulama
-        final_preds = []
+        # =====================================================================
+        # DÜZELTİLEN KISIM: UZMAN KURALLARININ ÇALIŞTIRILMASI VE LİSTE YAPISI
+        # =====================================================================
+        final_preds_list = []
         for i, raw_pred in enumerate(raw_preds):
-            # Doğrudan satırın tamamını (tüm _YoY sütunlarını içerecek şekilde) gönderiyoruz
-            current_row_features = test_df.iloc[i] 
+            current_row_features = test_df.iloc[i]
+            # Her bir tahmin için modele özgü yazılmış expert_rules tetikleniyor
             adjusted_pred = model_instance.expert_rules(raw_pred, current_row_features)
-            final_preds.append(adjusted_pred)
+            final_preds_list.append(adjusted_pred)
             
-        final_preds = np.array(final_preds)
-        mae = np.mean(np.abs(final_preds - y_test))
-        print(f"✅ {model_instance.tax_name} için Test Seti MAE Skoru: {mae:.4f}")
+        final_preds = np.array(final_preds_list)
+        
+        # Gerçek hedef değişkenin YoY değerleri (Zaten tek boyutlu dizidir)
+        y_test_yoy = y_test.flatten() if hasattr(y_test, "flatten") else np.array(y_test)
+        
+        # MAE ve MSE Hesaplama
+        mae = np.mean(np.abs(y_test_yoy - final_preds))
+        mse = np.mean((y_test_yoy - final_preds) ** 2)
+        
+        print(f"📊 {model_instance.tax_name} Modeli Performansı:")
+        print(f"   -> Ortalama Mutlak Hata (MAE): {mae:.4f} %")
+        print(f"   -> Ortalama Kare Hata (MSE): {mse:.4f} %")
+        
+        # =====================================================================
+        # 🎯 DÖNEM BAZLI TAHMİN VE GERÇEK DEĞER PRİNTLERİ
+        # =====================================================================
+        print(f"\n🔮 {model_instance.tax_name} - Test Dönemi Tahmin Sonuçları (YoY %):")
+        print("-" * 85)
+        print(f"{'Dönem':<12} | {'Gerçek YoY (%)':<16} | {'Model Ham Tahmin (%)':<22} | {'Uzman Ayarlı Tahmin (%)':<24}")
+        print("-" * 85)
+        
+        # Güvenli tarih erişimi için test_df indeksini kontrol et/oluştur
+        if 'Period' in test_df.columns:
+            periods = pd.to_datetime(test_df['Period'])
+        else:
+            periods = pd.to_datetime(test_df.index)
+        
+        # Test veri kümesindeki her bir satır (dönem) için sonuçları yazdır
+        for idx in range(len(test_df)):
+            current_date = periods[idx]
+            
+            # Çeyreklik veya aylık frekansa göre ekranda güzel görünmesini sağlıyoruz
+            if model_instance.frequency == "quarterly":
+                quarter = (current_date.month - 1) // 3 + 1
+                period_str = f"{current_date.year}Q{quarter}"
+            else:
+                period_str = current_date.strftime('%Y-%m')
+            
+            actual_val = y_test_yoy[idx]
+            raw_pred_val = raw_preds[idx]
+            final_pred_val = final_preds[idx]
+            
+            print(f"{period_str:<12} | {actual_val:<16.2f} | {raw_pred_val:<22.2f} | {final_pred_val:<24.2f}")
+            
+        print("-" * 85)
+        print("=" * 60) # Modeller arası görsel ayrım
 
 if __name__ == "__main__":
     main()

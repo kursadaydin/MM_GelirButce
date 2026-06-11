@@ -26,19 +26,28 @@ class BaseTaxModel:
         
         df_filtered = df[['Period'] + feature_cols + [target_col]].copy()
         
-        # --- TÜRKÇE ÇEYREKLİK FORMATI (2018 Ç1 -> 2018Q1) DÜZELTME KATMANI ---
+        # --- TARİH DÖNÜŞTÜRME VE TEMİZLEME KATMANI ---
         df_filtered['Period'] = df_filtered['Period'].astype(str).str.strip()
         
         if self.frequency == "quarterly":
+            # Hücrelerde Türkçe 'Ç' kalmışsa 'Q'ya normalize et (Örn: 2018 Ç1 -> 2018Q1)
             df_filtered['Period'] = df_filtered['Period'].str.replace('Ç', 'Q', regex=False).str.replace(' ', '', regex=False)
-            df_filtered['Period'] = pd.to_datetime(df_filtered['Period'])
-        else:
-            df_filtered['Period'] = pd.to_datetime(df_filtered['Period'], errors='coerce')
             
+            # %YQ%q hatasını önlemek için güvenli çözücü:
+            # Çeyreklik stringi ('2018Q1') o çeyreğin ilk gününe (datetime) eşler.
+            df_filtered['Period'] = df_filtered['Period'].apply(
+                lambda x: pd.to_datetime(x.replace('Q1', '-01-01').replace('Q2', '-04-01').replace('Q3', '-07-01').replace('Q4', '-10-01'))
+                if 'Q' in x else pd.to_datetime(x, errors='coerce')
+            )
+        else:
+            # Aylık veriler için format='mixed' ile esnek parse (UserWarning ve çökme üretmez)
+            df_filtered['Period'] = pd.to_datetime(df_filtered['Period'], format='mixed', errors='coerce')
+            
+        # Tarihi indeks yapıp kronolojik sıralıyoruz
         df_filtered.set_index('Period', inplace=True)
         df_filtered.sort_index(inplace=True)
         
-        # Değişim oranı hesaplama (n / n-12 veya n / n-4)
+        # --- YILLIK DEĞİŞİM (YoY) HESAPLAMA ---
         if self.frequency == "monthly":
             df_pct = df_filtered.pct_change(periods=12) * 100
         else:
@@ -46,11 +55,12 @@ class BaseTaxModel:
             
         df_pct.dropna(inplace=True)
         
-        # --- SÜTUN İSİMLERİNE _YoY SON EKİ EKLEME (KeyError Çözümü) ---
-        # Hem feature hem de target sütunlarının sonuna _YoY ekliyoruz
+        # --- DÜZELTİLEN KISIM: SÜTUN ADLANDIRMA VE VERİ DİLİMLEME ---
+        # Sütun isimlerini değiştiriyoruz
         rename_dict = {col: f"{col}_YoY" for col in feature_cols + [target_col]}
         df_pct.rename(columns=rename_dict, inplace=True)
         
+        # Dilimleme yaparken hata almamak için yeni sütun isim listelerini oluşturuyoruz
         yoy_features = [f"{col}_YoY" for col in feature_cols]
         yoy_target = f"{target_col}_YoY"
         
@@ -59,19 +69,20 @@ class BaseTaxModel:
         train_df = df_pct.iloc[:split_idx]
         test_df = df_pct.iloc[split_idx:]
         
+        # Doğru sütun isimleriyle dizileri (Array) besleme
         X_train = train_df[yoy_features].values
         y_train = train_df[yoy_target].values
         X_test = test_df[yoy_features].values
         y_test = test_df[yoy_target].values
         
-        # Verileri Ölçeklendirme
+        # Verileri Ölçeklendirme (Scaling)
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
         return X_train_scaled, y_train, X_test_scaled, y_test, test_df
 
     def build_model(self, input_dim):
-        # Keras 3.x modern Sequential mimarisi (Input katmanı ile)
+        # Keras 3.x modern yapısı
         self.model = Sequential([
             Input(shape=(input_dim,)),
             Dense(64, activation='relu'),
@@ -95,7 +106,12 @@ class BaseTaxModel:
         )
 
     def predict(self, X):
-        return self.model.predict(X, verbose=0).flatten()
+        # Numpy dizisini TensorFlow tensor yapısına güvenli bir şekilde dönüştürüyoruz
+        X_tensor = tf.convert_to_tensor(X, dtype=tf.float32)
+        
+        # model.predict() yerine doğrudan çağırarak (training=False ile) 
+        # retracing uyarısını tamamen engelliyor ve hızı artırıyoruz.
+        return self.model(X_tensor, training=False).numpy().flatten()
 
     def expert_rules(self, raw_prediction, current_features):
         return raw_prediction
