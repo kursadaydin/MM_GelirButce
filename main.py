@@ -21,7 +21,7 @@ import numpy as np
 from src import tax_models
 
 # Excel dosyasının adı ve içindeki SAYFA (Sheet) isimleri konfigürasyonu
-EXCEL_FILE_NAME = "data_ml_tax.xlsx"
+EXCEL_FILE_NAME = "data_ml_tax_v2.xlsx"
 
 TAX_CONFIGS = {
     "PIT": {
@@ -58,7 +58,7 @@ TAX_CONFIGS = {
         "sheet_name": "Tobacco SCT",
         "model_class": tax_models.TobaccoSCTModel,
         "target": "Tax_Tobacco_SCT",
-        "features": ["Cons_Tobacco", "Advolorem_Tax_Tobacco"]
+        "features": ["Average_Price_Pack_Cigarette","Cons_Tobacco", "Advolorem_Tax_Tobacco","Specific_Tax_Tobacco","Min_Specific_Tax_Tobacco"]
     },
     "Motor_Vehicles_SCT": {
         "sheet_name": "Motor Vehicles SCT",
