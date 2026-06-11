@@ -1,16 +1,16 @@
-# base_model.py (Güncellenmiş Versiyon)
+# src/base_model.py
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Input
 from tensorflow.keras.optimizers import Adam
 
 class BaseTaxModel:
     def __init__(self, tax_name, frequency="monthly"):
         self.tax_name = tax_name
-        self.frequency = frequency # "monthly" veya "quarterly"
+        self.frequency = frequency  # "monthly" veya "quarterly"
         self.model = None
         self.scaler = StandardScaler()
         self.feature_columns = []
@@ -25,35 +25,44 @@ class BaseTaxModel:
         self.feature_columns = feature_cols
         
         df_filtered = df[['Period'] + feature_cols + [target_col]].copy()
-        df_filtered.set_index('Period', inplace=True)
         
-        # --- SİZİN BELİRTTİĞİNİZ DEĞİŞİM ORANI ALGORİTMASI ---
-        if self.frequency == "monthly":
-            # Aylık veri için: n / (n-12) -> periods=12
-            # pandas pct_change(12) tam olarak (n - n-12) / n-12 * 100 hesaplar
-            df_pct = df_filtered.pct_change(periods=12) * 100
-        elif self.frequency == "quarterly":
-            # Çeyreklik veri için: n / (n-4) -> periods=4
-            df_pct = df_filtered.pct_change(periods=4) * 100
+        # --- TÜRKÇE ÇEYREKLİK FORMATI (2018 Ç1 -> 2018Q1) DÜZELTME KATMANI ---
+        df_filtered['Period'] = df_filtered['Period'].astype(str).str.strip()
+        
+        if self.frequency == "quarterly":
+            df_filtered['Period'] = df_filtered['Period'].str.replace('Ç', 'Q', regex=False).str.replace(' ', '', regex=False)
+            df_filtered['Period'] = pd.to_datetime(df_filtered['Period'])
         else:
-            # Varsayılan düz zincirleme değişim
-            df_pct = df_filtered.pct_change() * 100
+            df_filtered['Period'] = pd.to_datetime(df_filtered['Period'], errors='coerce')
             
-        # Değişim oranından dolayı ilk 4 veya 12 satır NaN (boş) olacaktır, onları temizliyoruz
+        df_filtered.set_index('Period', inplace=True)
+        df_filtered.sort_index(inplace=True)
+        
+        # Değişim oranı hesaplama (n / n-12 veya n / n-4)
+        if self.frequency == "monthly":
+            df_pct = df_filtered.pct_change(periods=12) * 100
+        else:
+            df_pct = df_filtered.pct_change(periods=4) * 100
+            
         df_pct.dropna(inplace=True)
         
-        # Sonsuz veya hatalı değerleri (0'a bölünme vb.) düzeltme
-        df_pct.replace([np.inf, -np.inf], 0, inplace=True)
+        # --- SÜTUN İSİMLERİNE _YoY SON EKİ EKLEME (KeyError Çözümü) ---
+        # Hem feature hem de target sütunlarının sonuna _YoY ekliyoruz
+        rename_dict = {col: f"{col}_YoY" for col in feature_cols + [target_col]}
+        df_pct.rename(columns=rename_dict, inplace=True)
         
-        # Kronolojik Train / Test Ayrımı
+        yoy_features = [f"{col}_YoY" for col in feature_cols]
+        yoy_target = f"{target_col}_YoY"
+        
+        # Kronolojik Ayrım (%80 Train, %20 Test)
         split_idx = int(len(df_pct) * train_ratio)
         train_df = df_pct.iloc[:split_idx]
         test_df = df_pct.iloc[split_idx:]
         
-        X_train = train_df[feature_cols].values
-        y_train = train_df[target_col].values
-        X_test = test_df[feature_cols].values
-        y_test = test_df[target_col].values
+        X_train = train_df[yoy_features].values
+        y_train = train_df[yoy_target].values
+        X_test = test_df[yoy_features].values
+        y_test = test_df[yoy_target].values
         
         # Verileri Ölçeklendirme
         X_train_scaled = self.scaler.fit_transform(X_train)
@@ -62,8 +71,10 @@ class BaseTaxModel:
         return X_train_scaled, y_train, X_test_scaled, y_test, test_df
 
     def build_model(self, input_dim):
+        # Keras 3.x modern Sequential mimarisi (Input katmanı ile)
         self.model = Sequential([
-            Dense(64, activation='relu', input_shape=(input_dim,)),
+            Input(shape=(input_dim,)),
+            Dense(64, activation='relu'),
             Dense(32, activation='relu'),
             Dense(1)
         ])
@@ -74,17 +85,17 @@ class BaseTaxModel:
         if self.model is None:
             self.build_model(X_train.shape[1])
             
-        history = self.model.fit(
+        # Full-batch training
+        self.model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
             epochs=epochs,
-            batch_size=len(X_train), # Full-batch
+            batch_size=len(X_train),
             verbose=0
         )
-        return history
 
-    def predict(self, X_scaled):
-        return self.model.predict(X_scaled).flatten()
+    def predict(self, X):
+        return self.model.predict(X, verbose=0).flatten()
 
     def expert_rules(self, raw_prediction, current_features):
         return raw_prediction
