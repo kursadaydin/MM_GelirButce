@@ -21,7 +21,7 @@ import numpy as np
 from src import tax_models
 
 # Excel dosyasının adı ve içindeki SAYFA (Sheet) isimleri konfigürasyonu
-EXCEL_FILE_NAME = "data_ml_tax_v2.xlsx"
+EXCEL_FILE_NAME = "data_ml_tax_v3.xlsx"
 
 TAX_CONFIGS = {
     "PIT": {
